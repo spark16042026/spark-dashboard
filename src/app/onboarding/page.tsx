@@ -280,6 +280,10 @@ function OnboardingWizard() {
   }, [])
 
   async function handleSave() {
+    if (!agentId) {
+      alert('Agent not loaded yet — please wait a moment and try again.')
+      return
+    }
     setSaving(true)
     const memoryFile = {
       agent: { name: profile.name, title: profile.title, agency: profile.agency, license: profile.license },
@@ -357,7 +361,7 @@ function OnboardingWizard() {
                 Continue →
               </button>
             ) : (
-              <button onClick={handleSave} disabled={saving}
+              <button onClick={handleSave} disabled={saving || !agentId}
                 className="bg-violet-600 text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
                 {saving ? 'Launching…' : '🚀 Launch AI Agent'}
               </button>
