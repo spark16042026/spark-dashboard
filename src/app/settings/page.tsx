@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
-type Section = 'profile' | 'tone' | 'properties' | 'faqs' | 'boundaries' | 'sources'
+type SectionId = 'profile' | 'tone' | 'properties' | 'faqs' | 'boundaries' | 'sources'
 
 type Property = {
   name: string; type: string; location: string; price_range: string
@@ -15,27 +15,54 @@ type FAQ = { question: string; answer: string }
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
+// ── Accordion section — defined OUTSIDE the page so it never remounts on re-render
+function AccordionSection({
+  id, title, open, setOpen, children,
+}: {
+  id: SectionId
+  title: string
+  open: SectionId | null
+  setOpen: (id: SectionId | null) => void
+  children: React.ReactNode
+}) {
+  const isOpen = open === id
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <button
+        onClick={() => setOpen(isOpen ? null : id)}
+        className="w-full flex justify-between items-center px-5 py-4 text-left hover:bg-gray-50 transition"
+      >
+        <span className="font-medium text-gray-800">{title}</span>
+        <span className="text-gray-400 text-lg">{isOpen ? '−' : '+'}</span>
+      </button>
+      {isOpen && (
+        <div className="px-5 pb-5 pt-2 border-t border-gray-100 space-y-4">{children}</div>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const router = useRouter()
   const supabase = createClient()
 
   const [agentId, setAgentId] = useState('')
-  const [open, setOpen] = useState<Section | null>('profile')
+  const [open, setOpen] = useState<SectionId | null>('profile')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [styleStats, setStyleStats] = useState<{messages_parsed:number, examples_extracted:number} | null>(null)
+  const [styleStats, setStyleStats] = useState<{ messages_parsed: number; examples_extracted: number } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
 
-  // Form state
-  const [profile, setProfile] = useState<Record<string,string>>({})
-  const [tone, setTone] = useState<Record<string,string>>({})
+  const [profile, setProfile] = useState<Record<string, string>>({})
+  const [tone, setTone] = useState<Record<string, string>>({})
   const [properties, setProperties] = useState<Property[]>([])
   const [faqs, setFaqs] = useState<FAQ[]>([])
   const [boundaries, setBoundaries] = useState<string[]>([])
   const [sources, setSources] = useState<string[]>([])
+  const [sourceDraft, setSourceDraft] = useState('')
+  const [bdDraft, setBdDraft] = useState('')
 
-  // Auth + load
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.push('/'); return }
@@ -43,12 +70,16 @@ export default function SettingsPage() {
       if (!agent) { router.push('/onboarding'); return }
       setAgentId(agent.agent_id)
       const mf = agent.memory_file || {}
-      setProfile({ ...((mf.agent as Record<string,string>) || {}), phone: agent.phone || '' })
-      setTone((mf.tone as Record<string,string>) || {})
+      setProfile({ ...((mf.agent as Record<string, string>) || {}), phone: agent.phone || '' })
+      setTone((mf.tone as Record<string, string>) || {})
       setProperties(((mf.properties as Property[]) || []).map(p => ({
         ...p,
-        key_selling_points: Array.isArray(p.key_selling_points) ? (p.key_selling_points as unknown as string[]).join(', ') : (p.key_selling_points || ''),
-        unit_types: Array.isArray(p.unit_types) ? (p.unit_types as unknown as string[]).join(', ') : (p.unit_types || ''),
+        key_selling_points: Array.isArray(p.key_selling_points)
+          ? (p.key_selling_points as unknown as string[]).join(', ')
+          : (p.key_selling_points || ''),
+        unit_types: Array.isArray(p.unit_types)
+          ? (p.unit_types as unknown as string[]).join(', ')
+          : (p.unit_types || ''),
       })))
       setFaqs((mf.faqs as FAQ[]) || [])
       setBoundaries((mf.boundaries as string[]) || ['Do not engage in conversations outside of property topics'])
@@ -99,31 +130,29 @@ export default function SettingsPage() {
     }
   }
 
-  function addProp() { setProperties(p => [...p, { name:'', type:'', location:'', price_range:'', key_selling_points:'', unit_types:'', available_units:'' }]) }
-  function updateProp(i: number, k: keyof Property, v: string) { setProperties(p => p.map((x,j) => j===i ? {...x,[k]:v} : x)) }
-  function removeProp(i: number) { setProperties(p => p.filter((_,j) => j!==i)) }
+  function addProp() {
+    setProperties(p => [...p, { name: '', type: '', location: '', price_range: '', key_selling_points: '', unit_types: '', available_units: '' }])
+  }
+  function updateProp(i: number, k: keyof Property, v: string) {
+    setProperties(p => p.map((x, j) => j === i ? { ...x, [k]: v } : x))
+  }
+  function removeProp(i: number) { setProperties(p => p.filter((_, j) => j !== i)) }
 
-  function addFaq() { setFaqs(f => [...f, { question:'', answer:'' }]) }
-  function updateFaq(i: number, k: 'question'|'answer', v: string) { setFaqs(f => f.map((x,j) => j===i ? {...x,[k]:v} : x)) }
-  function removeFaq(i: number) { setFaqs(f => f.filter((_,j) => j!==i)) }
+  function addFaq() { setFaqs(f => [...f, { question: '', answer: '' }]) }
+  function updateFaq(i: number, k: 'question' | 'answer', v: string) {
+    setFaqs(f => f.map((x, j) => j === i ? { ...x, [k]: v } : x))
+  }
+  function removeFaq(i: number) { setFaqs(f => f.filter((_, j) => j !== i)) }
 
-  const [sourceDraft, setSourceDraft] = useState('')
-  function addSource() { const v = sourceDraft.trim(); if (v && !sources.includes(v)) setSources([...sources, v]); setSourceDraft('') }
-  const [bdDraft, setBdDraft] = useState('')
-  function addBoundary() { const v = bdDraft.trim(); if (v) setBoundaries([...boundaries, v]); setBdDraft('') }
-
-  function Section({ id, title, children }: { id: Section, title: string, children: React.ReactNode }) {
-    const isOpen = open === id
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <button onClick={() => setOpen(isOpen ? null : id)}
-          className="w-full flex justify-between items-center px-5 py-4 text-left hover:bg-gray-50 transition">
-          <span className="font-medium text-gray-800">{title}</span>
-          <span className="text-gray-400 text-lg">{isOpen ? '−' : '+'}</span>
-        </button>
-        {isOpen && <div className="px-5 pb-5 pt-2 border-t border-gray-100 space-y-4">{children}</div>}
-      </div>
-    )
+  function addSource() {
+    const v = sourceDraft.trim()
+    if (v && !sources.includes(v)) setSources(s => [...s, v])
+    setSourceDraft('')
+  }
+  function addBoundary() {
+    const v = bdDraft.trim()
+    if (v) setBoundaries(b => [...b, v])
+    setBdDraft('')
   }
 
   return (
@@ -139,29 +168,44 @@ export default function SettingsPage() {
 
       <main className="max-w-2xl mx-auto w-full px-4 py-6 space-y-3">
 
-        <Section id="profile" title="Agent Profile">
-          {[['name','Name'],['title','Title'],['agency','Agency'],['license','CEA License'],['phone','WhatsApp number (for alerts)']].map(([k,label]) => (
+        <AccordionSection id="profile" title="Agent Profile" open={open} setOpen={setOpen}>
+          {[
+            ['name', 'Name'],
+            ['title', 'Title'],
+            ['agency', 'Agency'],
+            ['license', 'CEA License'],
+            ['phone', 'WhatsApp number (for alerts)'],
+          ].map(([k, label]) => (
             <div key={k}>
               <label className="block text-xs text-gray-500 mb-0.5">{label}</label>
-              <input value={profile[k]||''} onChange={e => setProfile({...profile,[k]:e.target.value})}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              <input
+                value={profile[k] || ''}
+                onChange={e => setProfile(prev => ({ ...prev, [k]: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
             </div>
           ))}
-        </Section>
+        </AccordionSection>
 
-        <Section id="tone" title="Tone & Style">
-          {[['style','Communication style'],['greeting','Greeting template']].map(([k,label]) => (
+        <AccordionSection id="tone" title="Tone & Style" open={open} setOpen={setOpen}>
+          {[['style', 'Communication style'], ['greeting', 'Greeting template']].map(([k, label]) => (
             <div key={k}>
               <label className="block text-xs text-gray-500 mb-0.5">{label}</label>
-              <input value={tone[k]||''} onChange={e => setTone({...tone,[k]:e.target.value})}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              <input
+                value={tone[k] || ''}
+                onChange={e => setTone(prev => ({ ...prev, [k]: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
             </div>
           ))}
           <div>
             <label className="block text-xs text-gray-500 mb-0.5">Emoji usage</label>
-            <select value={tone.emoji_usage||'moderate'} onChange={e => setTone({...tone,emoji_usage:e.target.value})}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500">
-              {['none','light','moderate','heavy'].map(v => <option key={v} value={v}>{v}</option>)}
+            <select
+              value={tone.emoji_usage || 'moderate'}
+              onChange={e => setTone(prev => ({ ...prev, emoji_usage: e.target.value }))}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              {['none', 'light', 'moderate', 'heavy'].map(v => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
           <div className="pt-2 border-t border-gray-100">
@@ -173,20 +217,23 @@ export default function SettingsPage() {
             {uploadError && <p className="text-xs text-red-500 mt-1">{uploadError}</p>}
             {styleStats && <p className="text-xs text-green-600 mt-1">✓ {styleStats.messages_parsed} messages · {styleStats.examples_extracted} examples</p>}
           </div>
-        </Section>
+        </AccordionSection>
 
-        <Section id="properties" title={`Properties (${properties.length}/100)`}>
+        <AccordionSection id="properties" title={`Properties (${properties.length}/100)`} open={open} setOpen={setOpen}>
           {properties.map((p, i) => (
             <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium">{p.name || `Property ${i+1}`}</span>
+                <span className="text-sm font-medium">{p.name || `Property ${i + 1}`}</span>
                 <button onClick={() => removeProp(i)} className="text-xs text-gray-400 hover:text-red-500">Remove</button>
               </div>
-              {(['name','type','location','price_range','key_selling_points','unit_types','available_units'] as (keyof Property)[]).map(k => (
+              {(['name', 'type', 'location', 'price_range', 'key_selling_points', 'unit_types', 'available_units'] as (keyof Property)[]).map(k => (
                 <div key={k}>
-                  <label className="block text-[10px] text-gray-400 mb-0.5 capitalize">{k.replace(/_/g,' ')}</label>
-                  <input value={p[k]} onChange={e => updateProp(i,k,e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                  <label className="block text-[10px] text-gray-400 mb-0.5 capitalize">{k.replace(/_/g, ' ')}</label>
+                  <input
+                    value={p[k]}
+                    onChange={e => updateProp(i, k, e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  />
                 </div>
               ))}
             </div>
@@ -196,20 +243,24 @@ export default function SettingsPage() {
               + Add Property
             </button>
           )}
-        </Section>
+        </AccordionSection>
 
-        <Section id="faqs" title={`FAQs (${faqs.length}/20)`}>
+        <AccordionSection id="faqs" title={`FAQs (${faqs.length}/20)`} open={open} setOpen={setOpen}>
           {faqs.map((f, i) => (
             <div key={i} className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-gray-400">FAQ {i+1}</span>
+                <span className="text-xs text-gray-400">FAQ {i + 1}</span>
                 <button onClick={() => removeFaq(i)} className="text-xs text-gray-400 hover:text-red-500">Remove</button>
               </div>
-              {(['question','answer'] as ('question'|'answer')[]).map(k => (
+              {(['question', 'answer'] as ('question' | 'answer')[]).map(k => (
                 <div key={k}>
                   <label className="block text-[10px] text-gray-400 mb-0.5 capitalize">{k}</label>
-                  <textarea value={f[k]} onChange={e => updateFaq(i,k,e.target.value)} rows={2}
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none" />
+                  <textarea
+                    value={f[k]}
+                    onChange={e => updateFaq(i, k, e.target.value)}
+                    rows={2}
+                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  />
                 </div>
               ))}
             </div>
@@ -219,41 +270,51 @@ export default function SettingsPage() {
               + Add FAQ
             </button>
           )}
-        </Section>
+        </AccordionSection>
 
-        <Section id="boundaries" title={`Boundaries (${boundaries.length}/10)`}>
+        <AccordionSection id="boundaries" title={`Boundaries (${boundaries.length}/10)`} open={open} setOpen={setOpen}>
           {boundaries.map((b, i) => (
             <div key={i} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
               <span className="flex-1">{b}</span>
-              {i > 0 && <button onClick={() => setBoundaries(boundaries.filter((_,j) => j!==i))} className="text-gray-400 hover:text-red-500">✕</button>}
+              {i > 0 && (
+                <button onClick={() => setBoundaries(boundaries.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500">✕</button>
+              )}
               {i === 0 && <span className="text-[10px] text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded">locked</span>}
             </div>
           ))}
           {boundaries.length < 10 && (
             <div className="flex gap-2">
-              <input value={bdDraft} onChange={e => setBdDraft(e.target.value)} onKeyDown={e => e.key==='Enter' && addBoundary()}
+              <input
+                value={bdDraft}
+                onChange={e => setBdDraft(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addBoundary()}
                 placeholder="e.g. Never discuss commission"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
               <button onClick={addBoundary} className="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-medium">Add</button>
             </div>
           )}
-        </Section>
+        </AccordionSection>
 
-        <Section id="sources" title="Lead Generator Sources">
+        <AccordionSection id="sources" title="Lead Generator Sources" open={open} setOpen={setOpen}>
           <p className="text-xs text-gray-400">Emails from these addresses/domains are automatically classified as leads.</p>
           {sources.map((s, i) => (
             <div key={i} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
               <span className="flex-1">{s}</span>
-              <button onClick={() => setSources(sources.filter((_,j) => j!==i))} className="text-gray-400 hover:text-red-500">✕</button>
+              <button onClick={() => setSources(sources.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500">✕</button>
             </div>
           ))}
           <div className="flex gap-2">
-            <input value={sourceDraft} onChange={e => setSourceDraft(e.target.value)} onKeyDown={e => e.key==='Enter' && addSource()}
+            <input
+              value={sourceDraft}
+              onChange={e => setSourceDraft(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addSource()}
               placeholder="@propertyguru.com.sg"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+            />
             <button onClick={addSource} className="bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-medium">Add</button>
           </div>
-        </Section>
+        </AccordionSection>
 
       </main>
     </div>
