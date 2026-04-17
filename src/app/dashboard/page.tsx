@@ -8,6 +8,8 @@ import ScoreBadge from '@/components/ScoreBadge'
 import ManagedByBadge from '@/components/ManagedByBadge'
 import { Lead, Score, LeadStatus, Notification } from '@/types'
 
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
+
 const STATUS_COLORS: Record<LeadStatus, string> = {
   'Not Started':    'border-l-gray-300',
   'In Conversation':'border-l-green-400',
@@ -38,6 +40,8 @@ export default function DashboardPage() {
   const [showNotifs, setShowNotifs] = useState(false)
   const [agentId, setAgentId] = useState<string | null>(null)
   const [agentName, setAgentName] = useState('')
+  const [lastPolledAt, setLastPolledAt] = useState<string | null>(null)
+  const [polling, setPolling] = useState(false)
   const [search, setSearch] = useState('')
   const [filterScore, setFilterScore] = useState<Score | ''>('')
   const [filterStatus, setFilterStatus] = useState<LeadStatus | ''>('')
@@ -48,11 +52,12 @@ export default function DashboardPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/'); return }
 
-      supabase.from('agents').select('agent_id, name').eq('email', data.user.email!).maybeSingle()
+      supabase.from('agents').select('agent_id, name, last_polled_at').eq('email', data.user.email!).maybeSingle()
         .then(({ data: agent }) => {
           if (!agent) { router.push('/onboarding'); return }
           setAgentId(agent.agent_id)
           setAgentName(agent.name)
+          setLastPolledAt(agent.last_polled_at || null)
         })
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,11 +120,37 @@ export default function DashboardPage() {
         }
       ).subscribe()
 
+    // Watch for last_polled_at updates from the background scheduler
+    const agentSub = supabase.channel('agent-poll-rt')
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'agents', filter: `agent_id=eq.${agentId}` },
+        (payload) => {
+          const updated = payload.new as { last_polled_at?: string }
+          if (updated.last_polled_at) setLastPolledAt(updated.last_polled_at)
+        }
+      ).subscribe()
+
     return () => {
       supabase.removeChannel(leadsSub)
       supabase.removeChannel(notifsSub)
+      supabase.removeChannel(agentSub)
     }
   }, [agentId, supabase])
+
+  async function checkInbox() {
+    setPolling(true)
+    try {
+      const res = await fetch(`${BACKEND?.replace(/\/$/, '')}/poll`, { method: 'POST' })
+      const data = await res.json()
+      if (data.polled_at) setLastPolledAt(data.polled_at)
+      // Reload leads to pick up any newly extracted ones
+      await loadLeads()
+    } catch (e) {
+      console.error('Poll failed', e)
+    } finally {
+      setPolling(false)
+    }
+  }
 
   async function markNotifsRead() {
     if (!agentId || unread === 0) return
@@ -187,6 +218,28 @@ export default function DashboardPage() {
                   ))}
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Polling status + manual trigger */}
+          <div className="flex items-center gap-2">
+            {polling ? (
+              <span className="flex items-center gap-1.5 text-xs text-violet-600 bg-violet-50 border border-violet-200 px-3 py-1.5 rounded-full">
+                <span className="w-2 h-2 bg-violet-500 rounded-full animate-pulse" />
+                Checking inbox…
+              </span>
+            ) : (
+              <button
+                onClick={checkInbox}
+                className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-full transition"
+              >
+                📥 Check inbox
+              </button>
+            )}
+            {lastPolledAt && !polling && (
+              <span className="text-xs text-gray-400 hidden sm:inline">
+                Last checked {timeAgo(lastPolledAt)}
+              </span>
             )}
           </div>
 
