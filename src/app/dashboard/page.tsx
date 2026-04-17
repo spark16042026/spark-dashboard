@@ -121,12 +121,16 @@ export default function DashboardPage() {
       ).subscribe()
 
     // Watch for last_polled_at updates from the background scheduler
+    // Also reload leads so the dashboard auto-refreshes after a background poll
     const agentSub = supabase.channel('agent-poll-rt')
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'agents', filter: `agent_id=eq.${agentId}` },
         (payload) => {
           const updated = payload.new as { last_polled_at?: string }
-          if (updated.last_polled_at) setLastPolledAt(updated.last_polled_at)
+          if (updated.last_polled_at) {
+            setLastPolledAt(updated.last_polled_at)
+            loadLeads()  // pull fresh leads after every background poll
+          }
         }
       ).subscribe()
 

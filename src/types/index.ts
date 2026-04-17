@@ -11,6 +11,7 @@ export interface Lead {
   phone: string
   email?: string
   property_interest?: string
+  notes?: string
   score: Score
   status: LeadStatus
   managed_by: ManagedBy
