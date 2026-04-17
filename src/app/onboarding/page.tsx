@@ -237,11 +237,25 @@ function OnboardingWizard() {
   const [tone, setTone] = useState<Record<string,string>>({})
   const [boundaries, setBoundaries] = useState(['Do not engage in conversations outside of property topics'])
 
-  // Load existing agent
+  // Load existing agent — create row if first login
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.push('/'); return }
-      const { data: agent } = await supabase.from('agents').select('*').eq('email', data.user.email!).single()
+      const email = data.user.email!
+
+      // Try to load existing agent row
+      let { data: agent } = await supabase.from('agents').select('*').eq('email', email).single()
+
+      // First login — no agent row yet, create one
+      if (!agent) {
+        const { data: created } = await supabase
+          .from('agents')
+          .insert({ email, name: email.split('@')[0], is_active: false })
+          .select()
+          .single()
+        agent = created
+      }
+
       if (agent) {
         setAgentId(agent.agent_id)
         setGmailConnected(!!agent.gmail_token)

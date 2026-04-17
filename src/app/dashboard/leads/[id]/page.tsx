@@ -31,7 +31,7 @@ export default function LeadDetailPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/'); return }
-      supabase.from('agents').select('agent_id').eq('email', data.user.email!).single()
+      supabase.from('agents').select('agent_id').eq('email', data.user.email!).maybeSingle()
         .then(({ data: agent }) => agent && setAgentId(agent.agent_id))
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps

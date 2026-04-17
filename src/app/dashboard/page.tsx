@@ -48,7 +48,7 @@ export default function DashboardPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/'); return }
 
-      supabase.from('agents').select('agent_id, name').eq('email', data.user.email!).single()
+      supabase.from('agents').select('agent_id, name').eq('email', data.user.email!).maybeSingle()
         .then(({ data: agent }) => {
           if (!agent) { router.push('/onboarding'); return }
           setAgentId(agent.agent_id)

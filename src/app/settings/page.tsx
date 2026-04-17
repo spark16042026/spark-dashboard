@@ -39,7 +39,7 @@ export default function SettingsPage() {
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) { router.push('/'); return }
-      const { data: agent } = await supabase.from('agents').select('*').eq('email', data.user.email!).single()
+      const { data: agent } = await supabase.from('agents').select('*').eq('email', data.user.email!).maybeSingle()
       if (!agent) { router.push('/onboarding'); return }
       setAgentId(agent.agent_id)
       const mf = agent.memory_file || {}

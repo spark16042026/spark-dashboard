@@ -29,7 +29,7 @@ export default function LoginPage() {
       .from('agents')
       .select('memory_file')
       .eq('email', email)
-      .single()
+      .maybeSingle()
 
     const hasOnboarded = (agent?.memory_file as Record<string, unknown> | null)?.agent
     router.push(hasOnboarded ? '/dashboard' : '/onboarding')
