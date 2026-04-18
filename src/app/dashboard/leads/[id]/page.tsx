@@ -202,10 +202,27 @@ export default function LeadDetailPage() {
           <div className="space-y-2">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Heat Score</h2>
             <div className="bg-white rounded-xl border border-gray-200 px-3 py-3 space-y-3">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 {lead && <ScoreBadge score={lead.score} />}
-                {!isHumanManaged && (
-                  <span className="text-sm text-gray-500">Follow-ups: {lead?.follow_up_count ?? 0}/3</span>
+                {lead?.score === 'Cold' && (
+                  <div className="flex items-center gap-1">
+                    {[1, 3, 7].map((d, i) => {
+                      const done = (lead.follow_up_count ?? 0) > i
+                      return (
+                        <span
+                          key={d}
+                          title={`Day ${d} follow-up${done ? ' sent' : ' pending'}`}
+                          className={`px-1.5 py-0.5 text-[10px] rounded font-medium border ${
+                            done
+                              ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : 'bg-gray-50 text-gray-400 border-gray-200'
+                          }`}
+                        >
+                          Day {d}
+                        </span>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
               {isHumanManaged ? (
@@ -264,8 +281,9 @@ export default function LeadDetailPage() {
                 <div className="flex-1 min-w-0">
                   <h3 className="text-base font-semibold text-gray-900">Take over this conversation?</h3>
                   <p className="mt-2 text-sm text-gray-600 leading-relaxed">
-                    The AI will stop responding to <span className="font-medium text-gray-900">{lead.name}</span> permanently.
-                    This cannot be undone — you&apos;ll need to continue the conversation directly in WhatsApp.
+                    The AI will stop responding to{' '}
+                    <span className="font-medium text-gray-900">{lead.name}</span>{' '}
+                    permanently. This cannot be undone — you&apos;ll need to continue the conversation directly in WhatsApp.
                   </p>
                 </div>
               </div>
