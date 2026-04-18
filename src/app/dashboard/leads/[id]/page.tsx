@@ -48,7 +48,13 @@ export default function LeadDetailPage() {
   const loadMessages = useCallback(async () => {
     const { data } = await supabase.from('messages').select('*')
       .eq('lead_id', leadId).order('timestamp')
-    setMessages(data || [])
+    setMessages((prev) => {
+      const next = data || []
+      if (prev.length === next.length && prev[prev.length - 1]?.message_id === next[next.length - 1]?.message_id) {
+        return prev
+      }
+      return next
+    })
     setLoading(false)
   }, [leadId, supabase])
 
@@ -57,23 +63,46 @@ export default function LeadDetailPage() {
     loadMessages()
   }, [loadLead, loadMessages])
 
-  // Real-time: new messages
+  // Real-time: new messages (instant when it works)
   useEffect(() => {
-    const sub = supabase.channel('msgs-rt')
+    const msgSub = supabase.channel(`msgs-${leadId}`)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `lead_id=eq.${leadId}` },
-        (payload) => setMessages(prev => [...prev, payload.new as Message])
+        (payload) => setMessages((prev) => {
+          const incoming = payload.new as Message
+          if (prev.some((m) => m.message_id === incoming.message_id)) return prev
+          return [...prev, incoming]
+        })
       ).subscribe()
-    const leadSub = supabase.channel('lead-rt')
+    const leadSub = supabase.channel(`lead-${leadId}`)
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'leads', filter: `lead_id=eq.${leadId}` },
         (payload) => setLead(payload.new as Lead)
       ).subscribe()
     return () => {
-      supabase.removeChannel(sub)
+      supabase.removeChannel(msgSub)
       supabase.removeChannel(leadSub)
     }
   }, [leadId, supabase])
+
+  // Polling fallback: reliably refresh every 3s when the tab is visible,
+  // so the UI stays in sync even if the realtime channel is not delivering
+  // (e.g., RLS auth race on first subscribe).
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') {
+        loadMessages()
+        loadLead()
+      }
+    }
+    const id = setInterval(tick, 3000)
+    const onVisible = () => { if (document.visibilityState === 'visible') tick() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadMessages, loadLead])
 
   async function confirmTakeOver() {
     if (!lead || !agentId) return
