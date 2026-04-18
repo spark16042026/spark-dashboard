@@ -28,6 +28,7 @@ export default function LeadDetailPage() {
   const [agentId, setAgentId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [showTakeoverModal, setShowTakeoverModal] = useState(false)
 
   // Auth
   useEffect(() => {
@@ -74,15 +75,9 @@ export default function LeadDetailPage() {
     }
   }, [leadId, supabase])
 
-  async function handleTakeOver() {
+  async function confirmTakeOver() {
     if (!lead || !agentId) return
-    const ok = confirm(
-      `Take over ${lead.name}?\n\n` +
-      `Once you take over, the AI will stop responding on this lead permanently — ` +
-      `it cannot be handed back to the AI. You'll continue the conversation directly in WhatsApp.`
-    )
-    if (!ok) return
-
+    setShowTakeoverModal(false)
     setActionLoading(true)
     setLead({ ...lead, ai_paused: true, managed_by: 'human', status: 'Handed Off' })
 
@@ -162,7 +157,7 @@ export default function LeadDetailPage() {
           {/* Mobile action bar */}
           {!isHumanManaged && (
             <div className="lg:hidden border-t border-gray-200 px-4 py-3 bg-white flex gap-2">
-              <button onClick={handleTakeOver} disabled={actionLoading}
+              <button onClick={() => setShowTakeoverModal(true)} disabled={actionLoading}
                 className="flex-1 bg-orange-500 text-white text-sm py-2 rounded-lg font-medium disabled:opacity-50">
                 Take Over
               </button>
@@ -209,7 +204,9 @@ export default function LeadDetailPage() {
             <div className="bg-white rounded-xl border border-gray-200 px-3 py-3 space-y-3">
               <div className="flex items-center gap-3">
                 {lead && <ScoreBadge score={lead.score} />}
-                <span className="text-sm text-gray-500">Follow-ups: {lead?.follow_up_count ?? 0}/3</span>
+                {!isHumanManaged && (
+                  <span className="text-sm text-gray-500">Follow-ups: {lead?.follow_up_count ?? 0}/3</span>
+                )}
               </div>
               {isHumanManaged ? (
                 <div className="grid grid-cols-2 gap-2 pt-1">
@@ -238,7 +235,7 @@ export default function LeadDetailPage() {
           {!isHumanManaged && (
             <div className="hidden lg:block space-y-2">
               <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</h2>
-              <button onClick={handleTakeOver} disabled={actionLoading}
+              <button onClick={() => setShowTakeoverModal(true)} disabled={actionLoading}
                 className="w-full bg-orange-500 text-white text-sm py-2 rounded-lg font-medium disabled:opacity-50">
                 Take Over
               </button>
@@ -246,6 +243,50 @@ export default function LeadDetailPage() {
           )}
         </aside>
       </div>
+
+      {/* Take Over confirmation modal */}
+      {showTakeoverModal && lead && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+          onClick={() => setShowTakeoverModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="shrink-0 w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold text-gray-900">Take over this conversation?</h3>
+                  <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                    The AI will stop responding to <span className="font-medium text-gray-900">{lead.name}</span> permanently.
+                    This cannot be undone — you&apos;ll need to continue the conversation directly in WhatsApp.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-2">
+              <button
+                onClick={() => setShowTakeoverModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmTakeOver}
+                className="px-4 py-2 text-sm font-medium text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition shadow-sm"
+              >
+                Take Over
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
