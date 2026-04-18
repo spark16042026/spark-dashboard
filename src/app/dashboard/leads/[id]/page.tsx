@@ -7,7 +7,9 @@ import { createClient } from '@/lib/supabase'
 import ConversationView from '@/components/ConversationView'
 import ScoreBadge from '@/components/ScoreBadge'
 import ManagedByBadge from '@/components/ManagedByBadge'
-import { Lead, Message } from '@/types'
+import { Lead, Message, Score } from '@/types'
+
+const SCORES: Score[] = ['Cold', 'Warm', 'Hot', 'Scorching']
 
 function formatDate(ts: string) {
   return new Date(ts).toLocaleDateString('en-SG', {
@@ -91,22 +93,26 @@ export default function LeadDetailPage() {
     setActionLoading(false)
   }
 
-  async function handleResumeAI() {
-    if (!lead) return
+  async function handleSetScore(newScore: Score) {
+    if (!lead || lead.score === newScore) return
     setActionLoading(true)
-    await supabase.from('leads').update({
-      ai_paused: false,
-      managed_by: 'ai',
-      status: 'In Conversation',
-    }).eq('lead_id', leadId)
-    setActionLoading(false)
-  }
-
-  async function handleClose() {
-    if (!confirm('Mark this lead as Cold and stop AI engagement?')) return
-    setActionLoading(true)
-    await supabase.from('leads').update({ score: 'Cold', ai_paused: true, managed_by: 'human' })
-      .eq('lead_id', leadId)
+    const previous = lead.score
+    await supabase.from('leads').update({ score: newScore }).eq('lead_id', leadId)
+    await supabase.from('score_logs').insert({
+      lead_id: leadId,
+      previous_score: previous,
+      score: newScore,
+      reasoning: 'Manually set by agent',
+    })
+    if (agentId) {
+      await supabase.from('notifications').insert({
+        agent_id: agentId,
+        lead_id: leadId,
+        type: 'score_change',
+        title: `${lead.name} heat score changed`,
+        detail: `${previous} → ${newScore} (manual)`,
+      })
+    }
     setActionLoading(false)
   }
 
@@ -116,7 +122,7 @@ export default function LeadDetailPage() {
     </div>
   )
 
-  const isAIPaused = lead?.ai_paused
+  const isHumanManaged = lead?.managed_by === 'human'
 
   return (
     <div className="min-h-screen flex flex-col max-w-6xl mx-auto">
@@ -143,19 +149,14 @@ export default function LeadDetailPage() {
           )}
 
           {/* Mobile action bar */}
-          <div className="lg:hidden border-t border-gray-200 px-4 py-3 bg-white flex gap-2">
-            {isAIPaused ? (
-              <button onClick={handleResumeAI} disabled={actionLoading}
-                className="flex-1 bg-violet-600 text-white text-sm py-2 rounded-lg font-medium disabled:opacity-50">
-                Resume AI
-              </button>
-            ) : (
+          {!isHumanManaged && (
+            <div className="lg:hidden border-t border-gray-200 px-4 py-3 bg-white flex gap-2">
               <button onClick={handleTakeOver} disabled={actionLoading}
                 className="flex-1 bg-orange-500 text-white text-sm py-2 rounded-lg font-medium disabled:opacity-50">
                 Take Over
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Sidebar */}
@@ -194,31 +195,44 @@ export default function LeadDetailPage() {
           {/* Score */}
           <div className="space-y-2">
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Heat Score</h2>
-            <div className="bg-white rounded-xl border border-gray-200 px-3 py-3 flex items-center gap-3">
-              {lead && <ScoreBadge score={lead.score} />}
-              <span className="text-sm text-gray-500">Follow-ups: {lead?.follow_up_count ?? 0}/3</span>
+            <div className="bg-white rounded-xl border border-gray-200 px-3 py-3 space-y-3">
+              <div className="flex items-center gap-3">
+                {lead && <ScoreBadge score={lead.score} />}
+                <span className="text-sm text-gray-500">Follow-ups: {lead?.follow_up_count ?? 0}/3</span>
+              </div>
+              {isHumanManaged ? (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  {SCORES.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => handleSetScore(s)}
+                      disabled={actionLoading || lead?.score === s}
+                      className={`text-xs py-1.5 rounded-lg border font-medium transition disabled:opacity-50 ${
+                        lead?.score === s
+                          ? 'bg-violet-600 text-white border-violet-600'
+                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 italic">AI is managing — heat score updates automatically.</p>
+              )}
             </div>
           </div>
 
           {/* Desktop actions */}
-          <div className="hidden lg:block space-y-2">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</h2>
-            {isAIPaused ? (
-              <button onClick={handleResumeAI} disabled={actionLoading}
-                className="w-full bg-violet-600 text-white text-sm py-2 rounded-lg font-medium disabled:opacity-50">
-                Resume AI
-              </button>
-            ) : (
+          {!isHumanManaged && (
+            <div className="hidden lg:block space-y-2">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Actions</h2>
               <button onClick={handleTakeOver} disabled={actionLoading}
                 className="w-full bg-orange-500 text-white text-sm py-2 rounded-lg font-medium disabled:opacity-50">
                 Take Over
               </button>
-            )}
-            <button onClick={handleClose} disabled={actionLoading}
-              className="w-full bg-gray-100 text-gray-600 text-sm py-2 rounded-lg font-medium disabled:opacity-50 hover:bg-gray-200 transition">
-              Close Lead
-            </button>
-          </div>
+            </div>
+          )}
         </aside>
       </div>
     </div>
