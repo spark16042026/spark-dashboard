@@ -18,7 +18,6 @@ function formatDate(ts: string) {
 function Bubble({ msg }: { msg: Message }) {
   const isLead = msg.sender === 'lead'
   const isAI = msg.sender === 'ai'
-  const confidence = msg.metadata?.confidence
 
   return (
     <div className={`flex ${isLead ? 'justify-start' : 'justify-end'} mb-2`}>
@@ -36,9 +35,6 @@ function Bubble({ msg }: { msg: Message }) {
         </div>
         <div className={`flex gap-2 mt-0.5 text-[10px] text-gray-400 ${isLead ? '' : 'justify-end'}`}>
           <span>{formatTime(msg.timestamp)}</span>
-          {isAI && confidence !== undefined && (
-            <span className="text-gray-300">{Math.round(confidence * 100)}% confident</span>
-          )}
           {!isAI && !isLead && <span className="text-green-400">You</span>}
         </div>
       </div>
