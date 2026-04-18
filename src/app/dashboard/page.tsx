@@ -316,12 +316,18 @@ export default function DashboardPage() {
                 className={`block bg-white rounded-xl border border-l-4 border-gray-200 ${STATUS_COLORS[lead.status]} px-5 py-4 hover:shadow-sm transition`}
               >
                 <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-gray-900 truncate">{lead.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       {lead.phone}
-                      {lead.property_interest && <> · {lead.property_interest}</>}
+                      {' · '}
+                      {lead.property_interest || <span className="italic">General enquiry</span>}
                     </p>
+                    {lead.notes && (
+                      <p className="text-xs text-gray-600 mt-1.5 line-clamp-2 leading-relaxed">
+                        📝 {lead.notes}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2 flex-shrink-0 justify-end">
                     <ScoreBadge score={lead.score} />
