@@ -142,13 +142,19 @@ export default function DashboardPage() {
   }, [agentId, supabase])
 
   async function checkInbox() {
+    if (!agentId) return
     setPolling(true)
     try {
       const res = await fetch(`${BACKEND?.replace(/\/$/, '')}/poll`, { method: 'POST' })
       const data = await res.json()
       if (data.polled_at) setLastPolledAt(data.polled_at)
-      // Reload leads to pick up any newly extracted ones
-      await loadLeads()
+      // Direct fetch — avoids any stale closure on loadLeads
+      const { data: fresh } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('agent_id', agentId)
+        .order('last_activity', { ascending: false })
+      setLeads(fresh || [])
     } catch (e) {
       console.error('Poll failed', e)
     } finally {
