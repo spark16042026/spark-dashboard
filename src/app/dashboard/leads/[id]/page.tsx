@@ -76,7 +76,16 @@ export default function LeadDetailPage() {
 
   async function handleTakeOver() {
     if (!lead || !agentId) return
+    const ok = confirm(
+      `Take over ${lead.name}?\n\n` +
+      `Once you take over, the AI will stop responding on this lead permanently — ` +
+      `it cannot be handed back to the AI. You'll continue the conversation directly in WhatsApp.`
+    )
+    if (!ok) return
+
     setActionLoading(true)
+    setLead({ ...lead, ai_paused: true, managed_by: 'human', status: 'Handed Off' })
+
     await supabase.from('leads').update({
       ai_paused: true,
       managed_by: 'human',
@@ -97,6 +106,8 @@ export default function LeadDetailPage() {
     if (!lead || lead.score === newScore) return
     setActionLoading(true)
     const previous = lead.score
+    setLead({ ...lead, score: newScore })
+
     await supabase.from('leads').update({ score: newScore }).eq('lead_id', leadId)
     await supabase.from('score_logs').insert({
       lead_id: leadId,
