@@ -170,6 +170,13 @@ export default function DashboardPage() {
     setNotifs(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
+  async function clearAllNotifs() {
+    if (!agentId || notifs.length === 0) return
+    setNotifs([])
+    setUnread(0)
+    await supabase.from('notifications').delete().eq('agent_id', agentId)
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
     router.push('/')
@@ -209,7 +216,17 @@ export default function DashboardPage() {
 
             {showNotifs && (
               <div className="absolute right-0 mt-1 w-80 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
-                <div className="px-4 py-2 border-b text-sm font-medium text-gray-700">Notifications</div>
+                <div className="px-4 py-2 border-b flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Notifications</span>
+                  {notifs.length > 0 && (
+                    <button
+                      onClick={clearAllNotifs}
+                      className="text-xs text-gray-400 hover:text-red-500 transition"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                </div>
                 <div className="max-h-80 overflow-y-auto">
                   {notifs.length === 0 && (
                     <p className="text-sm text-gray-400 p-4 text-center">No notifications yet.</p>
